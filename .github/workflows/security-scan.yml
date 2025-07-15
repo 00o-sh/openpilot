@@ -1,0 +1,42 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install pip-audit and Bandit
+      run: |
+        pip install pip-audit bandit
+
+    - name: Python Dependency Vulnerability Audit
+      run: |
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+          pip-audit
+        else
+          echo "No requirements.txt found"
+        fi
+
+    - name: Python Static Code Analysis (Bandit)
+      run: |
+        bandit -r selfdrive -ll || true  # Do not fail the job if issues are found
+
+    - name: Install Grype
+      uses: anchore/scan-action@v3
+      with:
+        fail-build: false
