@@ -20,8 +20,6 @@ SPACING = 25
 RIGHT_COLUMN_WIDTH = 750
 REFRESH_INTERVAL = 10.0
 
-PRIME_BG_COLOR = rl.Color(51, 51, 51, 255)
-
 
 class HomeLayoutState(IntEnum):
   HOME = 0
@@ -41,10 +39,11 @@ class HomeLayout(Widget):
 
     self.current_state = HomeLayoutState.HOME
     self.last_refresh = 0
-    self.settings_callback: callable | None = None
+    self.settings_callback: Callable[[], None] | None = None
 
     self.update_available = False
     self.alert_count = 0
+    self._version_text = ""
     self._prev_update_available = False
     self._prev_alerts_present = False
 
@@ -63,6 +62,7 @@ class HomeLayout(Widget):
     self._setup_callbacks()
 
   def show_event(self):
+    super().show_event()
     self._exp_mode_button.show_event()
     self.last_refresh = time.monotonic()
     self._refresh()
@@ -178,7 +178,7 @@ class HomeLayout(Widget):
 
     version_rect = rl.Rectangle(self.header_rect.x + self.header_rect.width - version_text_width, self.header_rect.y,
                                 version_text_width, self.header_rect.height)
-    gui_label(version_rect, self._get_version_text(), 48, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
+    gui_label(version_rect, self._version_text, 48, rl.WHITE, alignment=rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
 
   def _render_home_content(self):
     self._render_left_column()
@@ -209,7 +209,7 @@ class HomeLayout(Widget):
     self._setup_widget.render(setup_rect)
 
   def _refresh(self):
-    # TODO: implement _update_state with a timer
+    self._version_text = self._get_version_text()
     update_available = self.update_alert.refresh()
     alert_count = self.offroad_alert.refresh()
     alerts_present = alert_count > 0

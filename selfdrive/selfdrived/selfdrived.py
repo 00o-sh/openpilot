@@ -22,6 +22,7 @@ from openpilot.selfdrive.selfdrived.state import StateMachine
 from openpilot.selfdrive.selfdrived.alertmanager import AlertManager, set_offroad_alert
 
 from openpilot.system.version import get_build_metadata
+from openpilot.system.hardware import HARDWARE
 
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
@@ -73,7 +74,7 @@ class SelfdriveD:
     # TODO: de-couple selfdrived with card/conflate on carState without introducing controls mismatches
     self.car_state_sock = messaging.sub_sock('carState', timeout=20)
 
-    ignore = self.sensor_packets + self.gps_packets + ['alertDebug']
+    ignore = self.sensor_packets + self.gps_packets + ['alertDebug', 'lateralManeuverPlan']
     if SIMULATION:
       ignore += ['driverCameraState', 'managerState']
     if REPLAY:
@@ -82,7 +83,8 @@ class SelfdriveD:
     self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'liveCalibration',
                                    'carOutput', 'driverMonitoringState', 'longitudinalPlan', 'livePose', 'liveDelay',
                                    'managerState', 'liveParameters', 'radarState', 'liveTorqueParameters',
-                                   'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userBookmark', 'audioFeedback'] + \
+                                   'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userBookmark', 'audioFeedback',
+                                   'lateralManeuverPlan'] + \
                                    self.camera_packets + self.sensor_packets + self.gps_packets,
                                   ignore_alive=ignore, ignore_avg_freq=ignore,
                                   ignore_valid=ignore, frequency=int(1/DT_CTRL))
@@ -123,6 +125,8 @@ class SelfdriveD:
 
     # Determine startup event
     self.startup_event = EventName.startup if build_metadata.openpilot.comma_remote and build_metadata.tested_channel else EventName.startupMaster
+    if HARDWARE.get_device_type() == 'mici':
+      self.startup_event = None
     if not car_recognized:
       self.startup_event = EventName.startupNoCar
     elif car_recognized and self.CP.passive:
@@ -145,7 +149,10 @@ class SelfdriveD:
       self.events.add(EventName.joystickDebug)
       self.startup_event = None
 
-    if self.sm.recv_frame['alertDebug'] > 0:
+    if self.sm.recv_frame['lateralManeuverPlan'] > 0:
+      self.events.add(EventName.lateralManeuver)
+      self.startup_event = None
+    elif self.sm.recv_frame['alertDebug'] > 0:
       self.events.add(EventName.longitudinalManeuver)
       self.startup_event = None
 
@@ -185,7 +192,7 @@ class SelfdriveD:
 
       if self.CP.notCar:
         # wait for everything to init first
-        if self.sm.frame > int(5. / DT_CTRL) and self.initialized:
+        if self.sm.frame > int(2. / DT_CTRL) and self.initialized:
           # body always wants to enable
           self.events.add(EventName.pcmEnable)
 
